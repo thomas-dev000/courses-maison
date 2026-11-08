@@ -12,6 +12,15 @@ Ouvrir https://thomas-dev000.github.io/courses-maison/ puis :
 - iPhone (Safari) : Partager > « Sur l'écran d'accueil » ;
 - Android (Chrome) : menu ⋮ > « Ajouter à l'écran d'accueil ».
 
+## Utiliser
+- **Liste** : taper un article, avec si besoin la quantité et l'unité à la fin : « Lait 3L »,
+  « Pâtes 1,5kg », « Viande 500g », « Mouchoirs 2 paquets », « Œufs x12 ». Toucher pour cocher,
+  appui long pour supprimer. Hors réseau, les changements attendent et partent au retour du réseau.
+- **Stock** : « − » retire 1 (paquets et unités) ; toucher un produit pour taper sa nouvelle
+  quantité et son unité (litres, kilos, paquets, unités).
+- **Ticket** : photographier le ticket ; vérifier les produits lus, préciser les quantités
+  signalées, puis « Ajouter au stock » (les articles achetés sont rayés de la liste).
+
 ## Développer
 - Fichiers statiques (HTML, CSS, modules JavaScript), publiés tels quels par GitHub Pages.
 - Logique pure dans `logique.js`, testée par `node --test` (Node 20 ou plus).
