@@ -1,6 +1,7 @@
 // Construction des écrans (DOM), sans état : app.js leur passe les données et les actions
 
-import { ENDROITS, libelleEndroit, dateCourte, regrouperParEndroit, separerListe, texteBadge } from './logique.js';
+import { ENDROITS, libelleEndroit, dateCourte, regrouperParEndroit, separerListe, texteBadge,
+         produitsRetenus, articlesRayes } from './logique.js';
 
 /** el('div', {class:'x', onclick: f}, enfant, 'texte', …) */
 export function el(balise, attributs = {}, ...enfants) {
@@ -11,7 +12,7 @@ export function el(balise, attributs = {}, ...enfants) {
     else if (k === 'class') n.className = v;
     else n.setAttribute(k, v === true ? '' : v);
   }
-  for (const e of enfants.flat()) {
+  for (const e of enfants.flat(Infinity)) {
     if (e === null || e === undefined || e === false) continue;
     n.append(e instanceof Node ? e : document.createTextNode(String(e)));
   }
@@ -87,13 +88,14 @@ export function demander(titre, texte, oui = 'Oui', non = 'Non') {
 /* ---------- Bandeau de message ---------- */
 
 let minuteurMessage = null;
-export function message(texte) {
+export function message(texte, genre = 'erreur') {
   let b = document.getElementById('message');
   if (!b) {
     b = el('div', { id: 'message', role: 'alert' });
     document.body.append(b);
   }
   b.textContent = texte;
+  b.className = genre;
   b.hidden = false;
   clearTimeout(minuteurMessage);
   minuteurMessage = setTimeout(() => { b.hidden = true; }, 3000);
@@ -161,4 +163,69 @@ export function vueListe(articles, { surAjouter, surCocher, surSupprimer, surEff
     el('p', { class: 'petit aide' }, 'Appui long sur un article pour le supprimer.'),
     el('div', { class: 'espace' }),
     el('button', { class: 'btn acc scanner', type: 'button', onclick: surScanner }, 'Scanner le ticket de caisse'));
+}
+
+/* ---------- Ticket de caisse ---------- */
+
+/**
+ * t = { phase: 'depart' | 'lecture' | 'confirmation' | 'envoi', lu, coches }
+ * lu = réponse de lire_ticket : { date, magasin, total, produits, doublon }
+ */
+export function vueTicket(t, articles, { surPhoto, surCocher, surEndroit, surAnnuler, surValider }) {
+  if (t.phase === 'depart') {
+    return el('section', { class: 'ticket depart' },
+      el('h2', {}, 'Scanner un ticket'),
+      el('p', { class: 'petit' }, 'Photographie le ticket bien à plat, en entier, avec assez de lumière. '
+        + 'Les produits sont lus automatiquement, tu confirmes avant l\'ajout au stock.'),
+      el('div', { class: 'espace' }),
+      el('button', { class: 'btn acc scanner', type: 'button', onclick: surPhoto }, 'Prendre le ticket en photo'));
+  }
+  if (t.phase === 'lecture') {
+    return el('section', { class: 'ticket attente-lecture', 'aria-busy': 'true' },
+      el('div', { class: 'roue', 'aria-hidden': 'true' }),
+      el('p', {}, 'Lecture du ticket…'),
+      el('p', { class: 'petit' }, 'Quelques secondes.'));
+  }
+
+  const lu = t.lu;
+  const retenus = produitsRetenus(lu.produits, t.coches);
+  const rayes = articlesRayes(articles, retenus);
+  const reconnus = lu.produits.filter(p => !p.ignorer).length;
+  const titre = lu.date ? 'Ticket du ' + dateCourte(lu.date) : 'Ticket';
+  const envoi = t.phase === 'envoi';
+
+  const rangee = (p, i) => {
+    const garde = t.coches[i] && !p.ignorer;
+    return el('li', { class: 'rang produit' + (garde ? '' : ' ecarte') },
+      el('button', { class: 'case-bouton', type: 'button', role: 'checkbox', 'aria-checked': garde ? 'true' : 'false',
+                     'aria-label': (garde ? 'Retirer ' : 'Garder ') + p.nom, onclick: () => surCocher(i) },
+        el('span', { class: 'case' + (garde ? ' on' : '') }),
+        el('span', { class: 'textes' },
+          el('span', { class: 'nom' }, p.nom),
+          el('span', { class: 'petit ligne-ticket' }, p.ligne_ticket))),
+      el('button', { class: 'endroit', type: 'button', 'aria-label': 'Endroit : ' + libelleEndroit(p.endroit) + ' (toucher pour changer)',
+                     onclick: () => surEndroit(i) }, libelleEndroit(p.endroit)),
+      el('span', { class: 'badge' }, p.ignorer ? 'ignoré' : '×' + p.quantite));
+  };
+
+  const rubriques = ENDROITS.map(e => {
+    const indices = lu.produits.map((p, i) => i).filter(i => lu.produits[i].endroit === e);
+    if (indices.length === 0) return null;
+    return [el('h2', { class: 'rubr' }, libelleEndroit(e)),
+            el('ul', { class: 'rangees' }, indices.map(i => rangee(lu.produits[i], i)))];
+  });
+
+  return el('section', { class: 'ticket confirmation' },
+    el('h2', { class: 'titre-ticket' }, titre),
+    el('p', { class: 'petit' }, [lu.magasin, reconnus + ' produit' + (reconnus > 1 ? 's' : '') + ' reconnu' + (reconnus > 1 ? 's' : ''),
+                                 'décoche ce qui est faux'].filter(Boolean).join(' · ')),
+    lu.doublon && el('p', { class: 'alerte' }, 'Ce ticket ressemble à celui ajouté le ' + dateCourte(lu.doublon) + '.'),
+    rubriques,
+    rayes.length > 0 && el('p', { class: 'petit rayes' },
+      'Rayés de la liste de courses : ' + rayes.map(a => a.nom.toLowerCase()).join(', ') + '.'),
+    el('div', { class: 'espace' }),
+    el('div', { class: 'boutons bas' },
+      el('button', { class: 'btn sur', type: 'button', onclick: surAnnuler, disabled: envoi }, 'Annuler'),
+      el('button', { class: 'btn acc', type: 'button', onclick: surValider, disabled: envoi || retenus.length === 0 },
+        envoi ? 'Ajout…' : 'Ajouter ' + retenus.length + ' produit' + (retenus.length > 1 ? 's' : '') + ' au stock')));
 }

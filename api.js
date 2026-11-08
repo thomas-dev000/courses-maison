@@ -30,7 +30,7 @@ export function garderEtat(etat) {
 
 /** Erreur lisible : réseau absent ou refus du script */
 export class ErreurScript extends Error {
-  constructor(message, horsLigne) { super(message); this.horsLigne = !!horsLigne; }
+  constructor(message, horsLigne, reponse) { super(message); this.horsLigne = !!horsLigne; this.reponse = reponse || null; }
 }
 
 async function repondre(promesse) {
@@ -48,7 +48,7 @@ async function repondre(promesse) {
   }
   if (!objet || objet.ok !== true) {
     const erreur = objet && objet.erreur;
-    throw new ErreurScript(erreur === 'cle' ? 'Clé refusée' : (erreur || 'Refusé par le script'));
+    throw new ErreurScript(erreur === 'cle' ? 'Clé refusée' : (erreur || 'Refusé par le script'), false, objet);
   }
   return objet;
 }

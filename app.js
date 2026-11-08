@@ -5,8 +5,10 @@
 // Le stock (« − ») et le ticket demandent le réseau : ils modifient le stock partagé.
 
 import { reglages, enregistrerReglages, dernierEtat, garderEtat, lire, ecrire } from './api.js';
-import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation } from './logique.js';
-import { el, vueReglages, vueStock, vueListe, demander, message } from './vues.js';
+import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation, produitsRetenus,
+         endroitSuivant, dateCourte } from './logique.js';
+import { vueReglages, vueStock, vueListe, vueTicket, demander, message } from './vues.js';
+import { photographier, reduireEnJpeg } from './ticket.js';
 
 const RAFRAICHISSEMENT_MS = 10000;
 const CLE_ATTENTE = 'courses.attente';
@@ -24,6 +26,7 @@ const etat = {
   ecrituresStock: 0,           // écritures du stock en cours : on ne réaffiche pas une lecture plus ancienne
   envoiEnCours: false,
   envois: 0,                   // opérations envoyées : une lecture commencée avant est périmée
+  ticket: { phase: 'depart' }, // voir vueTicket
 };
 
 const contenu = () => document.getElementById('contenu');
@@ -143,7 +146,72 @@ const actionsListe = {
       ajouterOperation({ type: 'effacer' });
     }
   },
-  surScanner: () => { etat.vue = 'ticket'; afficher(); },
+  surScanner: () => { etat.vue = 'ticket'; afficher(); actionsTicket.surPhoto(); },
+};
+
+/* ---------- Ticket ---------- */
+
+const actionsTicket = {
+  surPhoto: async () => {
+    const fichier = await photographier();
+    if (!fichier) return;
+    etat.ticket = { phase: 'lecture' };
+    afficher();
+    try {
+      const image = await reduireEnJpeg(fichier);
+      const lu = await ecrire({ action: 'lire_ticket', image });
+      etat.ticket = { phase: 'confirmation', lu, coches: lu.produits.map(p => !p.ignorer) };
+    } catch (e) {
+      etat.ticket = { phase: 'depart' };
+      message(e.horsLigne ? 'Pas de réseau : le scan du ticket en demande'
+        : e.message === 'lecture' ? 'Impossible de lire ce ticket, réessaie avec une photo plus nette'
+        : 'Lecture impossible : ' + e.message);
+    }
+    afficher();
+  },
+  surCocher: (i) => {
+    const t = etat.ticket;
+    const p = t.lu.produits[i];
+    if (p.ignorer) { p.ignorer = false; t.coches[i] = true; } else { t.coches[i] = !t.coches[i]; }
+    afficher();
+  },
+  surEndroit: (i) => {
+    const p = etat.ticket.lu.produits[i];
+    p.endroit = endroitSuivant(p.endroit);
+    afficher();
+  },
+  surAnnuler: () => { etat.ticket = { phase: 'depart' }; afficher(); },
+  surValider: async () => {
+    const t = etat.ticket;
+    const lu = t.lu;
+    let forcer = false;
+    if (lu.doublon) {
+      forcer = await demander('Ticket déjà ajouté ?', 'Il ressemble à celui ajouté le ' + dateCourte(lu.doublon)
+        + '. Deux passages en caisse le même jour ?', 'Ajouter quand même', 'Annuler');
+      if (!forcer) return;
+    }
+    const produits = produitsRetenus(lu.produits, t.coches);
+    t.phase = 'envoi';
+    afficher();
+    try {
+      const r = await ecrire({ action: 'ajouter_stock', produits, forcer,
+                               ticket: { date: lu.date, magasin: lu.magasin, total: lu.total } });
+      etat.ticket = { phase: 'depart' };
+      etat.vue = 'liste';
+      message(r.ajoutes + ' produit' + (r.ajoutes > 1 ? 's' : '') + ' ajouté' + (r.ajoutes > 1 ? 's' : '') + ' au stock'
+        + (r.retires && r.retires.length ? ' · ' + r.retires.length + ' rayé' + (r.retires.length > 1 ? 's' : '') + ' de la liste' : ''), 'ok');
+    } catch (e) {
+      t.phase = 'confirmation';
+      if (e.reponse && e.reponse.erreur === 'doublon') {
+        lu.doublon = e.reponse.deja_le;               // repéré par le script : on redemande
+        afficher();
+        return actionsTicket.surValider();
+      }
+      message(e.horsLigne ? 'Pas de réseau : rien n’a été ajouté' : 'Impossible d’ajouter : ' + e.message);
+    }
+    afficher();
+    relire();
+  },
 };
 
 /* ---------- Affichage ---------- */
@@ -209,7 +277,7 @@ function afficher() {
       surMoins: retirerUn,
     }));
   } else {
-    c.append(el('p', { class: 'aucun' }, 'Bientôt'));
+    c.append(vueTicket(etat.ticket, donnees.articles || [], actionsTicket));
   }
   window.scrollTo(0, defilement);
 }

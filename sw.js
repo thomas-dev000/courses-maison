@@ -1,7 +1,7 @@
 // Garde les fichiers de l'appli pour l'ouvrir sans réseau.
 // Les réponses du script ne sont pas mises en cache (le dernier état est dans le stockage local).
-const VERSION = 'courses-6';
-const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'api.js', 'vues.js', 'logique.js',
+const VERSION = 'courses-7';
+const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'api.js', 'vues.js', 'logique.js', 'ticket.js',
                   'manifest.webmanifest', 'icones/icone.svg', 'icones/icone-192.png', 'icones/icone-512.png'];
 
 self.addEventListener('install', (e) => {

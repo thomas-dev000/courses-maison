@@ -125,3 +125,32 @@ export function corpsOperation(op) {
   if (op.type === 'supprimer') return { action: 'supprimer_course', id: op.id };
   return { action: 'effacer_coches' };
 }
+
+/* ---------- Ticket de caisse ---------- */
+
+/** Dimensions réduites pour que le plus grand côté fasse au plus max pixels (jamais agrandies) */
+export function dimensionsReduites(l, h, max = 1600) {
+  const plusGrand = Math.max(l, h);
+  if (plusGrand <= max) return { l, h };
+  const r = max / plusGrand;
+  return { l: Math.round(l * r), h: Math.round(h * r) };
+}
+
+/** Produits gardés pour le stock : cochés et non ignorés */
+export function produitsRetenus(produits, coches) {
+  return (produits || [])
+    .filter((p, i) => !p.ignorer && coches[i])
+    .map(p => ({ nom: p.nom, endroit: p.endroit, quantite: p.quantite }));
+}
+
+/** Articles de la liste qui seront rayés (même règle que le script) */
+export function articlesRayes(articles, retenus) {
+  const noms = retenus.map(p => normaliser(p.nom));
+  return (articles || []).filter(a => noms.some(n => contientTousLesMots(n, normaliser(a.nom))));
+}
+
+/** Endroit suivant (toucher l'endroit d'un produit le fait tourner) */
+export function endroitSuivant(e) {
+  const i = ENDROITS.indexOf(e);
+  return ENDROITS[(i + 1) % ENDROITS.length];
+}
