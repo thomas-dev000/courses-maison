@@ -17,6 +17,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body { margin: 0; background: var(--fond); color: var(--texte); }
 
@@ -42,7 +43,8 @@ h3 { font-size: 18px; margin: 0; }
 .petit { font-size: 12px; color: var(--texte-2); }
 
 /* En-tête */
-.entete { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.entete { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: nowrap; }
+.entete > div:first-child { min-width: 0; }
 .entete .droite { display: flex; align-items: center; gap: 8px; }
 .icone { width: 40px; height: 40px; border-radius: 12px; background: var(--surface); font-size: 18px; }
 
@@ -108,7 +110,7 @@ input::placeholder { color: var(--texte-3); }
 
 /* Bandeau de message */
 #message {
-  position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  position: fixed; left: 16px; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 12px);
   max-width: 448px; margin: 0 auto; background: var(--erreur); color: var(--texte);
   padding: 12px 16px; border-radius: 12px; z-index: 20;
 }

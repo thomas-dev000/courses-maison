@@ -35,31 +35,39 @@ async function relire() {
   afficher();
 }
 
-/** Écriture optimiste : l'écran est déjà à jour ; en cas d'échec, on relit l'état confirmé */
-async function envoyer(corps) {
+/**
+ * Écriture optimiste : l'écran est déjà à jour. En cas d'échec, annuler() remet l'affichage
+ * d'avant (utile hors ligne, où la relecture échoue aussi). Renvoie true si c'est enregistré.
+ */
+async function envoyer(corps, annuler) {
   etat.enAttente++;
+  let ok = true;
   try {
     await ecrire(corps);
   } catch (e) {
+    ok = false;
+    if (annuler) annuler();
+    if (etat.donnees) garderEtat(etat.donnees);
     message(e.horsLigne ? 'Pas de réseau : rien n\'a été enregistré' : 'Impossible d\'enregistrer : ' + e.message);
   } finally {
     etat.enAttente--;
   }
   relire();
+  return ok;
 }
 
 /* ---------- Actions ---------- */
 
 async function retirerUn(p) {
-  p.quantite = Math.max(0, p.quantite - 1);
+  const avant = p.quantite;
+  p.quantite = Math.max(0, avant - 1);
   garderEtat(etat.donnees);
   afficher();
-  const fini = p.quantite === 0;
-  const envoi = envoyer({ action: 'retirer_unite', id: p.id });
-  if (fini && await demander('Plus de « ' + p.nom + ' » ?', 'Ajouter à la liste de courses ?', 'Ajouter')) {
-    await envoi;
+  const envoi = envoyer({ action: 'retirer_unite', id: p.id }, () => { p.quantite = avant; });
+  if (p.quantite > 0) return;
+  const ajouter = await demander('Plus de « ' + p.nom + ' » ?', 'Ajouter à la liste de courses ?', 'Ajouter');
+  if (ajouter && await envoi) {
     envoyer({ action: 'ajouter_course', nom: p.nom, quantite: 1, par: reglages().prenom });
-    message('« ' + p.nom + ' » ajouté à la liste');
   }
 }
 
