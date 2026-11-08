@@ -154,3 +154,14 @@ main#contenu { display: flex; flex-direction: column; flex: 1; }
 .rayes { margin: 14px 2px 0; }
 .bas { margin-top: 16px; }
 button:disabled { opacity: .45; cursor: default; }
+
+/* Unités : rangée du stock touchable, fenêtre de quantité, ticket à préciser */
+.rang .textes.modifier {
+  display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  background: transparent; color: inherit; padding: 6px 0; min-height: 44px; justify-content: center;
+}
+.moins-absent { width: 44px; flex: none; }
+.feuille label.quantite { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--texte-2); }
+.seg-unites button { min-height: 44px; }
+.badge.quantite { min-height: 32px; }
+.badge.a-preciser { background: #3a2a1a; color: var(--accent); font-weight: 600; }

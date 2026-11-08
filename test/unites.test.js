@@ -71,3 +71,32 @@ test('les opérations et le ticket gardent l\'unité', () => {
   assert.deepEqual(produitsRetenus([{ nom: 'Pâtes', endroit: 'placard', quantite: 1, unite: 'kg', ignorer: false }], [true]),
                    [{ nom: 'Pâtes', endroit: 'placard', quantite: 1, unite: 'kg' }]);
 });
+
+test('preparerLecture : unité différente de celle du stock → quantité à préciser', async () => {
+  const { preparerLecture } = await import('../logique.js');
+  const stock = [{ nom: 'Pâtes', endroit: 'placard', quantite: 1.5, unite: 'kg' }];
+  const lu = { produits: [
+    { nom: 'pates', endroit: 'placard', quantite: 2, unite: 'paquet', a_preciser: false, ignorer: false },
+    { nom: 'Pâtes', endroit: 'frigo', quantite: 2, unite: 'paquet', a_preciser: false, ignorer: false },
+    { nom: 'Pâtes', endroit: 'placard', quantite: 0.5, unite: 'kg', a_preciser: false, ignorer: false }] };
+  const r = preparerLecture(lu, stock);
+  assert.deepEqual([r.produits[0].a_preciser, r.produits[0].unite, r.produits[0].quantite], [true, 'kg', null]);
+  assert.deepEqual([r.produits[1].a_preciser, r.produits[1].unite, r.produits[1].quantite], [false, 'paquet', 2]);
+  assert.deepEqual([r.produits[2].a_preciser, r.produits[2].quantite], [false, 0.5]);
+});
+
+test('marquerAPreciser : produits refusés par le script pour leur unité', async () => {
+  const { marquerAPreciser } = await import('../logique.js');
+  const produits = [{ nom: 'Pâtes', unite: 'paquet', quantite: 2, a_preciser: false }, { nom: 'Riz', unite: 'kg', quantite: 1 }];
+  marquerAPreciser(produits, ['pates'], ['kg']);
+  assert.deepEqual([produits[0].a_preciser, produits[0].unite, produits[0].quantite], [true, 'kg', null]);
+  assert.equal(produits[1].quantite, 1);
+});
+
+test('ticketValidable : un produit coché doit avoir sa quantité', async () => {
+  const { ticketValidable } = await import('../logique.js');
+  const p = [{ nom: 'A', quantite: null, a_preciser: true, ignorer: false }, { nom: 'B', quantite: 1, ignorer: false }];
+  assert.equal(ticketValidable(p, [true, true]), false);
+  assert.equal(ticketValidable(p, [false, true]), true);
+  assert.equal(ticketValidable(p, [false, false]), false);
+});

@@ -229,3 +229,35 @@ export function endroitSuivant(e) {
   const i = ENDROITS.indexOf(e);
   return ENDROITS[(i + 1) % ENDROITS.length];
 }
+
+/**
+ * Après la lecture du ticket : un produit dont l'unité diffère de celle du produit du stock (même nom
+ * normalisé, même endroit) devient « à préciser », dans l'unité du stock, sans quantité.
+ */
+export function preparerLecture(lu, produitsStock) {
+  for (const p of lu.produits || []) {
+    const s = (produitsStock || []).find(x => normaliser(x.nom) === normaliser(p.nom) && x.endroit === p.endroit);
+    if (s && lireUnite(s.unite) !== lireUnite(p.unite)) {
+      p.unite = lireUnite(s.unite);
+      p.quantite = null;
+      p.a_preciser = true;
+    }
+  }
+  return lu;
+}
+
+/** Le script a refusé ces noms pour leur unité : à préciser dans l'unité du stock */
+export function marquerAPreciser(produits, noms, unites) {
+  (noms || []).forEach((nom, i) => {
+    for (const p of produits || []) {
+      if (normaliser(p.nom) === normaliser(nom)) { p.unite = lireUnite(unites[i]); p.quantite = null; p.a_preciser = true; }
+    }
+  });
+  return produits;
+}
+
+/** Au moins un produit retenu, et tous les produits retenus ont une quantité */
+export function ticketValidable(produits, coches) {
+  const retenus = (produits || []).filter((p, i) => !p.ignorer && coches[i]);
+  return retenus.length > 0 && retenus.every(p => p.quantite !== null && p.quantite !== undefined);
+}

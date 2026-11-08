@@ -6,8 +6,8 @@
 
 import { reglages, enregistrerReglages, dernierEtat, garderEtat, lire, ecrire } from './api.js';
 import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation, produitsRetenus,
-         endroitSuivant, dateCourte } from './logique.js';
-import { vueReglages, vueStock, vueListe, vueTicket, demander, message } from './vues.js';
+         endroitSuivant, dateCourte, uniteParDefaut, preparerLecture, marquerAPreciser } from './logique.js';
+import { vueReglages, vueStock, vueListe, vueTicket, demander, demanderQuantite, message } from './vues.js';
 import { photographier, reduireEnJpeg } from './ticket.js';
 
 const RAFRAICHISSEMENT_MS = 10000;
@@ -112,9 +112,15 @@ async function ecrireStock(corps, annuler) {
 
 /* ---------- Actions ---------- */
 
-function nouvelArticle(nom, quantite) {
+function nouvelArticle(nom, quantite, unite) {
   ajouterOperation({ type: 'ajouter', id: 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-                     nom, quantite, par: reglages().prenom });
+                     nom, quantite, unite, par: reglages().prenom });
+}
+
+/** Produit épuisé : proposer de l'ajouter à la liste (1 dans son unité) une fois l'écriture faite */
+async function proposerListe(p, envoi) {
+  const ajouter = await demander('Plus de « ' + p.nom + ' » ?', 'Ajouter à la liste de courses ?', 'Ajouter');
+  if (ajouter && await envoi) nouvelArticle(p.nom, 1, p.unite || 'unite');
 }
 
 async function retirerUn(p) {
@@ -124,15 +130,29 @@ async function retirerUn(p) {
   afficher();
   const envoi = ecrireStock({ action: 'retirer_unite', id: p.id }, () => { p.quantite = avant; });
   if (p.quantite > 0) return;
-  const ajouter = await demander('Plus de « ' + p.nom + ' » ?', 'Ajouter à la liste de courses ?', 'Ajouter');
-  if (ajouter && await envoi) nouvelArticle(p.nom, 1);
+  await proposerListe(p, envoi);
+}
+
+/** Fenêtre « Modifier » : nouvelle quantité et unité (0 permis) */
+async function modifierProduit(p) {
+  const r = await demanderQuantite(p.nom, p.quantite, p.unite || 'unite', true);
+  if (!r) return;
+  const avant = { quantite: p.quantite, unite: p.unite };
+  p.quantite = r.quantite;
+  p.unite = r.unite;
+  garderEtat(etat.donnees);
+  afficher();
+  const envoi = ecrireStock({ action: 'regler_stock', id: p.id, quantite: r.quantite, unite: r.unite },
+                            () => { p.quantite = avant.quantite; p.unite = avant.unite; });
+  if (r.quantite === 0 && avant.quantite > 0) await proposerListe(p, envoi);
 }
 
 const actionsListe = {
   surAjouter: (texte) => {
-    const a = lireArticle(texte);
-    if (!a) return false;
-    nouvelArticle(a.nom, a.quantite);
+    const brut = lireArticle(texte);
+    if (!brut) return false;
+    const a = lireArticle(texte, uniteParDefaut(brut.nom, (etat.donnees || {}).produits));
+    nouvelArticle(a.nom, a.quantite, a.unite);
     return true;
   },
   surCocher: (a) => ajouterOperation({ type: 'cocher', id: a.id, coche: !a.coche }),
@@ -159,7 +179,7 @@ const actionsTicket = {
     afficher();
     try {
       const image = await reduireEnJpeg(fichier);
-      const lu = await ecrire({ action: 'lire_ticket', image });
+      const lu = preparerLecture(await ecrire({ action: 'lire_ticket', image }), (etat.donnees || {}).produits);
       etat.ticket = { phase: 'confirmation', lu, coches: lu.produits.map(p => !p.ignorer) };
     } catch (e) {
       etat.ticket = { phase: 'depart' };
@@ -180,6 +200,16 @@ const actionsTicket = {
   surEndroit: (i) => {
     const p = etat.ticket.lu.produits[i];
     p.endroit = endroitSuivant(p.endroit);
+    afficher();
+  },
+  surQuantite: async (i) => {
+    const p = etat.ticket.lu.produits[i];
+    const r = await demanderQuantite(p.nom + (p.ligne_ticket ? ' · ' + p.ligne_ticket : ''), p.quantite, p.unite, false);
+    if (!r) return;
+    p.quantite = r.quantite;
+    p.unite = r.unite;
+    p.a_preciser = false;
+    etat.ticket.coches[i] = true;
     afficher();
   },
   surAnnuler: () => { etat.ticket = { phase: 'depart' }; afficher(); },
@@ -208,6 +238,14 @@ const actionsTicket = {
         lu.doublon = e.reponse.deja_le;               // repéré par le script : on redemande
         afficher();
         return actionsTicket.surValider();
+      }
+      if (e.reponse && e.reponse.erreur === 'unite') {
+        marquerAPreciser(lu.produits, e.reponse.noms, e.reponse.unites || []);
+        const en = { l: 'litres', kg: 'kilos', paquet: 'paquets', unite: 'unités' };
+        message('Quantité à préciser : ' + (e.reponse.noms || []).map((n, j) =>
+          n + ' (compté en ' + (en[(e.reponse.unites || [])[j]] || 'unités') + ')').join(', '));
+        afficher();
+        return;
       }
       message(e.horsLigne ? 'Pas de réseau : rien n’a été ajouté' : 'Impossible d’ajouter : ' + e.message);
     }
@@ -277,6 +315,7 @@ function afficher() {
     c.append(vueStock(donnees.produits || [], etat.endroit, {
       surEndroit: (e) => { etat.endroit = e; afficher(); },
       surMoins: retirerUn,
+      surModifier: modifierProduit,
     }));
   } else {
     c.append(vueTicket(etat.ticket, donnees.articles || [], actionsTicket));
