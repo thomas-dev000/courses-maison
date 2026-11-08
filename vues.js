@@ -119,9 +119,9 @@ function appuiLong(n, action) {
 
 function rangeeArticle(a, { surCocher, surSupprimer }) {
   const badge = texteBadge(a.maison);
-  const sous = a.enAttente ? 'en attente d\'envoi'
-    : a.quantite > 1 ? '×' + a.quantite + ' à acheter'
-    : a.ajoute_par ? 'ajouté par ' + a.ajoute_par : '';
+  const quoi = a.quantite > 1 ? '×' + a.quantite + ' à acheter'
+    : (!a.enAttente && a.ajoute_par) ? 'ajouté par ' + a.ajoute_par : '';
+  const sous = [quoi, a.enAttente ? 'en attente d\'envoi' : ''].filter(Boolean).join(' · ');
   const r = el('li', { class: 'rang article' + (a.coche ? ' coche' : '') },
     el('button', { class: 'case-bouton', type: 'button', role: 'checkbox', 'aria-checked': a.coche ? 'true' : 'false',
                    'aria-label': (a.coche ? 'Décocher ' : 'Cocher ') + a.nom, onclick: () => surCocher(a) },
@@ -139,8 +139,11 @@ export function vueListe(articles, { surAjouter, surCocher, surSupprimer, surEff
   const champ = el('input', { type: 'text', placeholder: 'Ajouter un article… (« Lait x2 »)', maxlength: '70',
                               enterkeyhint: 'done', autocomplete: 'off', 'aria-label': 'Nouvel article' });
   const ajouter = () => {
-    if (surAjouter(champ.value)) { champ.value = ''; }
-    champ.focus();
+    const texte = champ.value;
+    champ.value = '';                       // vidé avant : l'écran se reconstruit pendant l'ajout
+    if (!surAjouter(texte)) champ.value = texte;
+    const nouveau = document.querySelector('.ajout input');
+    if (nouveau) nouveau.focus();
   };
   champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
 
