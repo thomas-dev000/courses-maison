@@ -5,12 +5,13 @@
 // Le stock (« − ») et le ticket demandent le réseau : ils modifient le stock partagé.
 
 import { reglages, enregistrerReglages, dernierEtat, garderEtat, lire, ecrire } from './api.js';
-import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation, produitsRetenus,
+import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation, produitsRetenus, erreurPassagere,
          endroitSuivant, dateCourte, uniteParDefaut, preparerLecture, marquerAPreciser } from './logique.js';
 import { vueReglages, vueStock, vueListe, vueTicket, demander, demanderQuantite, message } from './vues.js';
 import { photographier, reduireEnJpeg } from './ticket.js';
 
 const RAFRAICHISSEMENT_MS = 10000;
+const DELAI_TICKET_MS = 120000;     // Gemini peut être lent quand il est surchargé
 const CLE_ATTENTE = 'courses.attente';
 
 function lireAttente() {
@@ -51,6 +52,7 @@ async function viderAttente() {
         if (op.type === 'ajouter' && r.id) etat.attente = remplacerId(etat.attente, op.id, r.id);
       } catch (e) {
         if (e.horsLigne) { etat.horsLigne = true; break; }
+        if (erreurPassagere(e.message)) break;          // le script n'a pas pu répondre : on réessaiera
         etat.attente.shift();             // refusée par le script (article supprimé entre-temps…) : on l'oublie
         if (op.type !== 'cocher') message('Non enregistré : ' + e.message);
       }
@@ -179,7 +181,8 @@ const actionsTicket = {
     afficher();
     try {
       const image = await reduireEnJpeg(fichier);
-      const lu = preparerLecture(await ecrire({ action: 'lire_ticket', image }), (etat.donnees || {}).produits);
+      const lu = preparerLecture(await ecrire({ action: 'lire_ticket', image }, undefined, DELAI_TICKET_MS),
+                                 (etat.donnees || {}).produits);
       etat.ticket = { phase: 'confirmation', lu, coches: lu.produits.map(p => !p.ignorer) };
     } catch (e) {
       etat.ticket = { phase: 'depart' };

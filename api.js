@@ -53,19 +53,23 @@ async function repondre(promesse) {
   return objet;
 }
 
+// Sans réponse au bout de ce délai (réseau capté mais muet, au magasin), on fait comme hors ligne
+const DELAI_MS = 20000;
+
 /** GET <url>?cle=…&action=…&… */
 export function lire(action, params = {}, r = reglages()) {
   const adresse = new URL(r.url);
   adresse.searchParams.set('cle', r.cle);
   adresse.searchParams.set('action', action);
   for (const [k, v] of Object.entries(params)) adresse.searchParams.set(k, v);
-  return repondre(fetch(adresse, { cache: 'no-store' }));
+  return repondre(fetch(adresse, { cache: 'no-store', signal: AbortSignal.timeout(DELAI_MS) }));
 }
 
 /** POST du corps JSON en text/plain (pas de requête préalable CORS), avec la clé */
-export function ecrire(corps, r = reglages()) {
+export function ecrire(corps, r = reglages(), delai = DELAI_MS) {
   return repondre(fetch(r.url, {
     method: 'POST',
+    signal: AbortSignal.timeout(delai),
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(Object.assign({ cle: r.cle }, corps)),
   }));

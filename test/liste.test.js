@@ -49,6 +49,16 @@ test('remplacerId et corpsOperation', () => {
   assert.equal(att[0].id, 'srv');
   assert.equal(att[1].id, 'x');
   assert.deepEqual(corpsOperation({ type: 'ajouter', id: 'local-1', nom: 'Lait', quantite: 2, par: 'T' }),
-                   { action: 'ajouter_course', nom: 'Lait', quantite: 2, unite: 'unite', par: 'T' });
+                   { action: 'ajouter_course', nom: 'Lait', quantite: 2, unite: 'unite', par: 'T', client: 'local-1' });
   assert.deepEqual(corpsOperation({ type: 'effacer' }), { action: 'effacer_coches' });
+});
+
+test('erreurPassagere : on réessaie plus tard au lieu de jeter l’opération', async () => {
+  const { erreurPassagere } = await import('../logique.js');
+  assert.equal(erreurPassagere('Lock timeout: another process was holding the lock for too long.'), true);
+  assert.equal(erreurPassagere('Réponse illisible (adresse du script ?)'), true);
+  assert.equal(erreurPassagere('Service invoked too many times'), true);
+  assert.equal(erreurPassagere('article introuvable'), false);
+  assert.equal(erreurPassagere('Clé refusée'), false);
+  assert.equal(erreurPassagere(undefined), false);
 });

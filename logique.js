@@ -188,6 +188,11 @@ export function appliquerAttente(articles, attente, produits) {
   return liste;
 }
 
+/** Erreur passagère du script (verrou occupé, page d'erreur de Google, quota) : on réessaiera plus tard */
+export function erreurPassagere(message) {
+  return /lock|illisible|too many|timeout|temporar/i.test(String(message || ''));
+}
+
 /** Après l'envoi d'un ajout : les opérations suivantes visent l'identifiant donné par le script */
 export function remplacerId(attente, ancien, nouveau) {
   return attente.map(op => (op.id === ancien ? Object.assign({}, op, { id: nouveau }) : op));
@@ -195,7 +200,8 @@ export function remplacerId(attente, ancien, nouveau) {
 
 /** Corps POST d'une opération */
 export function corpsOperation(op) {
-  if (op.type === 'ajouter') return { action: 'ajouter_course', nom: op.nom, quantite: op.quantite, unite: lireUnite(op.unite), par: op.par };
+  // client : le script reconnaît une demande renvoyée deux fois (réponse perdue) et n'ajoute pas l'article en double
+  if (op.type === 'ajouter') return { action: 'ajouter_course', nom: op.nom, quantite: op.quantite, unite: lireUnite(op.unite), par: op.par, client: op.id };
   if (op.type === 'cocher') return { action: 'cocher_course', id: op.id, coche: op.coche };
   if (op.type === 'supprimer') return { action: 'supprimer_course', id: op.id };
   return { action: 'effacer_coches' };

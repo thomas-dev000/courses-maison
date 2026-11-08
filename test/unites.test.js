@@ -67,7 +67,7 @@ test('lireArticle : quantité et unité en fin de texte', () => {
 
 test('les opérations et le ticket gardent l\'unité', () => {
   assert.deepEqual(corpsOperation({ type: 'ajouter', id: 'local-1', nom: 'Lait', quantite: 3, unite: 'l', par: 'T' }),
-                   { action: 'ajouter_course', nom: 'Lait', quantite: 3, unite: 'l', par: 'T' });
+                   { action: 'ajouter_course', nom: 'Lait', quantite: 3, unite: 'l', par: 'T', client: 'local-1' });
   assert.deepEqual(produitsRetenus([{ nom: 'Pâtes', endroit: 'placard', quantite: 1, unite: 'kg', ignorer: false }], [true]),
                    [{ nom: 'Pâtes', endroit: 'placard', quantite: 1, unite: 'kg' }]);
 });
