@@ -165,6 +165,8 @@ const actionsTicket = {
       etat.ticket = { phase: 'depart' };
       message(e.horsLigne ? 'Pas de réseau : le scan du ticket en demande'
         : e.message === 'lecture' ? 'Impossible de lire ce ticket, réessaie avec une photo plus nette'
+        : e.message === 'gemini_occupe' ? 'Gemini est surchargé en ce moment, réessaie dans une minute'
+        : e.message === 'gemini' ? 'Gemini a refusé : ' + ((e.reponse && e.reponse.detail) || 'raison inconnue').slice(0, 120)
         : 'Lecture impossible : ' + e.message);
     }
     afficher();
