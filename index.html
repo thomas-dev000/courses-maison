@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F1317">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Courses</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icones/icone.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icones/icone-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="entete">
+    <div>
+      <h1>Courses</h1>
+      <div id="sous-titre" class="petit"></div>
+    </div>
+    <div class="droite">
+      <span id="etat" class="badge">…</span>
+      <button id="bouton-reglages" class="icone" type="button" aria-label="Réglages">⚙</button>
+    </div>
+  </header>
+  <nav id="vues" class="seg" role="tablist">
+    <button type="button" role="tab" data-vue="liste">Liste</button>
+    <button type="button" role="tab" data-vue="stock">Stock</button>
+    <button type="button" role="tab" data-vue="ticket">Ticket</button>
+  </nav>
+  <main id="contenu"></main>
+  <noscript>Cette appli a besoin de JavaScript.</noscript>
+</body>
+</html>
