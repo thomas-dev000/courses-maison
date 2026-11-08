@@ -14,7 +14,7 @@ test('produitsRetenus ignore les décochés et les « ignorer »', () => {
     { nom: 'Sac', endroit: 'placard', quantite: 1, ignorer: true },
     { nom: 'Café', endroit: 'placard', quantite: 1, ignorer: false },
   ];
-  assert.deepEqual(produitsRetenus(p, [true, true, false]), [{ nom: 'Lait', endroit: 'frigo', quantite: 2 }]);
+  assert.deepEqual(produitsRetenus(p, [true, true, false]), [{ nom: 'Lait', endroit: 'frigo', quantite: 2, unite: 'unite' }]);
 });
 
 test('articlesRayes : même règle de mots que le script', () => {

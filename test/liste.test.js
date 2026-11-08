@@ -5,8 +5,8 @@ import { texteBadge, separerListe, lireArticle, badgeMaison, contientTousLesMots
 
 test('texteBadge', () => {
   assert.equal(texteBadge(null), '');
-  assert.equal(texteBadge(0), 'plus rien');
-  assert.equal(texteBadge(2), 'maison : 2');
+  assert.equal(texteBadge({ unite: 0 }), 'plus rien');
+  assert.equal(texteBadge({ unite: 2 }), 'maison : ×2');
 });
 
 test('separerListe garde l\'ordre', () => {
@@ -16,17 +16,17 @@ test('separerListe garde l\'ordre', () => {
 });
 
 test('lireArticle : quantité « xN » à la fin', () => {
-  assert.deepEqual(lireArticle('Lait x2'), { nom: 'Lait', quantite: 2 });
-  assert.deepEqual(lireArticle('  œufs ×12 '), { nom: 'œufs', quantite: 12 });
-  assert.deepEqual(lireArticle('Pain'), { nom: 'Pain', quantite: 1 });
-  assert.deepEqual(lireArticle('x2'), { nom: 'x2', quantite: 1 });
+  assert.deepEqual(lireArticle('Lait x2'), { nom: 'Lait', quantite: 2, unite: 'unite' });
+  assert.deepEqual(lireArticle('  œufs ×12 '), { nom: 'œufs', quantite: 12, unite: 'unite' });
+  assert.deepEqual(lireArticle('Pain'), { nom: 'Pain', quantite: 1, unite: 'unite' });
+  assert.deepEqual(lireArticle('x2'), { nom: 'x2', quantite: 1, unite: 'unite' });
   assert.equal(lireArticle('   '), null);
 });
 
 test('règle des mots (même que le script)', () => {
   assert.equal(contientTousLesMots('lait demi-ecreme', 'lait'), true);
   assert.equal(contientTousLesMots('laitue', 'lait'), false);
-  assert.equal(badgeMaison({ nom: 'Lait' }, [{ nom: 'Lait demi-écrémé', quantite: 1 }, { nom: 'Lait entier', quantite: 2 }]), 3);
+  assert.deepEqual(badgeMaison({ nom: 'Lait' }, [{ nom: 'Lait demi-écrémé', quantite: 1 }, { nom: 'Lait entier', quantite: 2 }]), { unite: 3 });
   assert.equal(badgeMaison({ nom: 'Riz' }, []), null);
 });
 
@@ -39,7 +39,7 @@ test('appliquerAttente : ajout, coche, suppression, effacement', () => {
     { type: 'supprimer', id: 'b' },
   ], produits);
   assert.deepEqual(liste.map(a => [a.id, a.coche, !!a.enAttente]), [['a', true, true], ['local-1', false, true]]);
-  assert.equal(liste[1].maison, 1);
+  assert.deepEqual(liste[1].maison, { unite: 1 });
   assert.equal(articles[0].coche, false, 'la liste du script n\'est pas modifiée');
   assert.deepEqual(appliquerAttente(articles, [{ type: 'effacer' }], []).map(a => a.id), ['a']);
 });
@@ -49,6 +49,6 @@ test('remplacerId et corpsOperation', () => {
   assert.equal(att[0].id, 'srv');
   assert.equal(att[1].id, 'x');
   assert.deepEqual(corpsOperation({ type: 'ajouter', id: 'local-1', nom: 'Lait', quantite: 2, par: 'T' }),
-                   { action: 'ajouter_course', nom: 'Lait', quantite: 2, par: 'T' });
+                   { action: 'ajouter_course', nom: 'Lait', quantite: 2, unite: 'unite', par: 'T' });
   assert.deepEqual(corpsOperation({ type: 'effacer' }), { action: 'effacer_coches' });
 });
