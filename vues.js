@@ -1,6 +1,6 @@
 // Construction des écrans (DOM), sans état : app.js leur passe les données et les actions
 
-import { ENDROITS, libelleEndroit, dateCourte, regrouperParEndroit } from './logique.js';
+import { ENDROITS, libelleEndroit, dateCourte, regrouperParEndroit, separerListe, texteBadge } from './logique.js';
 
 /** el('div', {class:'x', onclick: f}, enfant, 'texte', …) */
 export function el(balise, attributs = {}, ...enfants) {
@@ -97,4 +97,65 @@ export function message(texte) {
   b.hidden = false;
   clearTimeout(minuteurMessage);
   minuteurMessage = setTimeout(() => { b.hidden = true; }, 3000);
+}
+
+/* ---------- Liste de courses ---------- */
+
+const APPUI_LONG_MS = 550;
+
+/** Appui long (ou clic droit) sur un élément → action ; un appui court reste un clic normal */
+function appuiLong(n, action) {
+  let minuteur = null;
+  let long = false;
+  const arreter = () => { clearTimeout(minuteur); minuteur = null; };
+  n.addEventListener('pointerdown', () => {
+    long = false;
+    minuteur = setTimeout(() => { long = true; action(); }, APPUI_LONG_MS);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) n.addEventListener(ev, arreter);
+  n.addEventListener('contextmenu', (e) => { e.preventDefault(); arreter(); if (!long) action(); long = true; });
+  n.addEventListener('click', (e) => { if (long) { e.stopImmediatePropagation(); e.preventDefault(); long = false; } }, true);
+}
+
+function rangeeArticle(a, { surCocher, surSupprimer }) {
+  const badge = texteBadge(a.maison);
+  const sous = a.enAttente ? 'en attente d\'envoi'
+    : a.quantite > 1 ? '×' + a.quantite + ' à acheter'
+    : a.ajoute_par ? 'ajouté par ' + a.ajoute_par : '';
+  const r = el('li', { class: 'rang article' + (a.coche ? ' coche' : '') },
+    el('button', { class: 'case-bouton', type: 'button', role: 'checkbox', 'aria-checked': a.coche ? 'true' : 'false',
+                   'aria-label': (a.coche ? 'Décocher ' : 'Cocher ') + a.nom, onclick: () => surCocher(a) },
+      el('span', { class: 'case' + (a.coche ? ' on' : '') }),
+      el('span', { class: 'textes' },
+        el('span', { class: 'nom' }, a.nom),
+        sous && el('span', { class: 'petit' + (a.enAttente ? ' attente' : '') }, sous))),
+    badge && !a.coche && el('span', { class: 'badge' + (a.maison === 0 ? ' vide' : '') }, badge));
+  appuiLong(r, () => surSupprimer(a));
+  return r;
+}
+
+export function vueListe(articles, { surAjouter, surCocher, surSupprimer, surEffacer, surScanner }) {
+  const { aAcheter, panier } = separerListe(articles);
+  const champ = el('input', { type: 'text', placeholder: 'Ajouter un article… (« Lait x2 »)', maxlength: '70',
+                              enterkeyhint: 'done', autocomplete: 'off', 'aria-label': 'Nouvel article' });
+  const ajouter = () => {
+    if (surAjouter(champ.value)) { champ.value = ''; }
+    champ.focus();
+  };
+  champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } });
+
+  const actions = { surCocher, surSupprimer };
+  return el('section', { class: 'liste' },
+    el('div', { class: 'ajout' }, champ,
+      el('button', { class: 'btn acc plus', type: 'button', 'aria-label': 'Ajouter', onclick: ajouter }, '+')),
+    el('h2', { class: 'rubr' }, 'À acheter · ' + aAcheter.length),
+    aAcheter.length === 0 ? el('p', { class: 'petit' }, 'Rien à acheter pour l\'instant.')
+      : el('ul', { class: 'rangees' }, aAcheter.map(a => rangeeArticle(a, actions))),
+    panier.length > 0 && el('div', { class: 'rubr-ligne' },
+      el('h2', { class: 'rubr' }, 'Dans le panier · ' + panier.length),
+      el('button', { class: 'lien', type: 'button', onclick: surEffacer }, 'Effacer le panier')),
+    panier.length > 0 && el('ul', { class: 'rangees' }, panier.map(a => rangeeArticle(a, actions))),
+    el('p', { class: 'petit aide' }, 'Appui long sur un article pour le supprimer.'),
+    el('div', { class: 'espace' }),
+    el('button', { class: 'btn acc scanner', type: 'button', onclick: surScanner }, 'Scanner le ticket de caisse'));
 }

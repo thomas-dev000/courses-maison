@@ -1,31 +1,82 @@
 // L'appli : état, navigation, rafraîchissement (toutes les 10 s quand la page est visible)
+//
+// Hors réseau : la liste de courses reste utilisable. Ajouts, coches et suppressions vont dans une
+// file d'attente gardée sur le téléphone (courses.attente) et partent dès que le réseau revient.
+// Le stock (« − ») et le ticket demandent le réseau : ils modifient le stock partagé.
 
 import { reglages, enregistrerReglages, dernierEtat, garderEtat, lire, ecrire } from './api.js';
-import { reglagesComplets } from './logique.js';
-import { el, vueReglages, vueStock, demander, message } from './vues.js';
+import { reglagesComplets, lireArticle, appliquerAttente, remplacerId, corpsOperation } from './logique.js';
+import { el, vueReglages, vueStock, vueListe, demander, message } from './vues.js';
 
 const RAFRAICHISSEMENT_MS = 10000;
+const CLE_ATTENTE = 'courses.attente';
+
+function lireAttente() {
+  try { return JSON.parse(localStorage.getItem(CLE_ATTENTE)) || []; } catch (e) { return []; }
+}
 
 const etat = {
-  vue: 'stock',                // 'liste' | 'stock' | 'ticket' | 'reglages'
+  vue: 'liste',                // 'liste' | 'stock' | 'ticket' | 'reglages'
   endroit: 'frigo',
-  donnees: dernierEtat(),      // { produits: [...], maj } — dernier état lu (gardé hors ligne)
+  donnees: dernierEtat(),      // { articles, produits, maj } — dernier état lu (gardé hors ligne)
+  attente: lireAttente(),      // opérations de la liste pas encore envoyées
   horsLigne: false,
-  enAttente: 0,                // écritures en cours : on ne réaffiche pas une lecture plus ancienne
+  ecrituresStock: 0,           // écritures du stock en cours : on ne réaffiche pas une lecture plus ancienne
+  envoiEnCours: false,
+  envois: 0,                   // opérations envoyées : une lecture commencée avant est périmée
 };
 
 const contenu = () => document.getElementById('contenu');
+
+function garderAttente() {
+  try { localStorage.setItem(CLE_ATTENTE, JSON.stringify(etat.attente)); } catch (e) { /* plein */ }
+}
+
+/* ---------- File d'attente de la liste ---------- */
+
+/** Envoie les opérations en attente, dans l'ordre ; s'arrête au premier problème de réseau */
+async function viderAttente() {
+  if (etat.envoiEnCours) return;
+  etat.envoiEnCours = true;
+  try {
+    while (etat.attente.length > 0) {
+      const op = etat.attente[0];
+      try {
+        const r = await ecrire(corpsOperation(op));
+        etat.attente.shift();
+        etat.envois++;
+        if (op.type === 'ajouter' && r.id) etat.attente = remplacerId(etat.attente, op.id, r.id);
+      } catch (e) {
+        if (e.horsLigne) { etat.horsLigne = true; break; }
+        etat.attente.shift();             // refusée par le script (article supprimé entre-temps…) : on l'oublie
+        if (op.type !== 'cocher') message('Non enregistré : ' + e.message);
+      }
+      garderAttente();
+    }
+  } finally {
+    etat.envoiEnCours = false;
+  }
+}
+
+function ajouterOperation(op) {
+  etat.attente.push(op);
+  garderAttente();
+  afficher();
+  relire();
+}
 
 /* ---------- Lecture ---------- */
 
 async function relire() {
   if (!reglagesComplets(reglages())) return;
-  const depart = etat.enAttente;
+  await viderAttente();
+  const stockAvant = etat.ecrituresStock;
+  const envoisAvant = etat.envois;
   try {
-    const r = await lire('stock');
+    const r = await lire('etat');
     etat.horsLigne = false;
-    if (etat.enAttente === 0 && depart === 0) {
-      etat.donnees = { produits: r.produits, maj: r.maj };
+    if (etat.ecrituresStock === 0 && stockAvant === 0 && etat.envois === envoisAvant) {
+      etat.donnees = { articles: r.articles, produits: r.produits, maj: r.maj };
       garderEtat(etat.donnees);
     }
   } catch (e) {
@@ -36,11 +87,11 @@ async function relire() {
 }
 
 /**
- * Écriture optimiste : l'écran est déjà à jour. En cas d'échec, annuler() remet l'affichage
- * d'avant (utile hors ligne, où la relecture échoue aussi). Renvoie true si c'est enregistré.
+ * Écriture du stock (réseau obligatoire) : l'écran est déjà à jour ; en cas d'échec, annuler()
+ * remet l'affichage d'avant. Renvoie true si c'est enregistré.
  */
-async function envoyer(corps, annuler) {
-  etat.enAttente++;
+async function ecrireStock(corps, annuler) {
+  etat.ecrituresStock++;
   let ok = true;
   try {
     await ecrire(corps);
@@ -50,7 +101,7 @@ async function envoyer(corps, annuler) {
     if (etat.donnees) garderEtat(etat.donnees);
     message(e.horsLigne ? 'Pas de réseau : rien n\'a été enregistré' : 'Impossible d\'enregistrer : ' + e.message);
   } finally {
-    etat.enAttente--;
+    etat.ecrituresStock--;
   }
   relire();
   return ok;
@@ -58,18 +109,42 @@ async function envoyer(corps, annuler) {
 
 /* ---------- Actions ---------- */
 
+function nouvelArticle(nom, quantite) {
+  ajouterOperation({ type: 'ajouter', id: 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                     nom, quantite, par: reglages().prenom });
+}
+
 async function retirerUn(p) {
   const avant = p.quantite;
   p.quantite = Math.max(0, avant - 1);
   garderEtat(etat.donnees);
   afficher();
-  const envoi = envoyer({ action: 'retirer_unite', id: p.id }, () => { p.quantite = avant; });
+  const envoi = ecrireStock({ action: 'retirer_unite', id: p.id }, () => { p.quantite = avant; });
   if (p.quantite > 0) return;
   const ajouter = await demander('Plus de « ' + p.nom + ' » ?', 'Ajouter à la liste de courses ?', 'Ajouter');
-  if (ajouter && await envoi) {
-    envoyer({ action: 'ajouter_course', nom: p.nom, quantite: 1, par: reglages().prenom });
-  }
+  if (ajouter && await envoi) nouvelArticle(p.nom, 1);
 }
+
+const actionsListe = {
+  surAjouter: (texte) => {
+    const a = lireArticle(texte);
+    if (!a) return false;
+    nouvelArticle(a.nom, a.quantite);
+    return true;
+  },
+  surCocher: (a) => ajouterOperation({ type: 'cocher', id: a.id, coche: !a.coche }),
+  surSupprimer: async (a) => {
+    if (await demander('Supprimer « ' + a.nom + ' » ?', 'Il sera retiré de la liste de tout le monde.', 'Supprimer')) {
+      ajouterOperation({ type: 'supprimer', id: a.id });
+    }
+  },
+  surEffacer: async () => {
+    if (await demander('Effacer le panier ?', 'Les articles cochés seront retirés de la liste.', 'Effacer')) {
+      ajouterOperation({ type: 'effacer' });
+    }
+  },
+  surScanner: () => { etat.vue = 'ticket'; afficher(); },
+};
 
 /* ---------- Affichage ---------- */
 
@@ -77,7 +152,9 @@ function enTete() {
   const r = reglages();
   document.getElementById('sous-titre').textContent = r.prenom ? 'Liste partagée · ' + r.prenom : '';
   const pastille = document.getElementById('etat');
-  pastille.textContent = etat.horsLigne ? 'Hors ligne' : (etat.donnees ? 'À jour' : '…');
+  const n = etat.attente.length;
+  pastille.textContent = etat.horsLigne ? (n > 0 ? 'Hors ligne · ' + n + ' en attente' : 'Hors ligne')
+    : n > 0 ? 'Envoi…' : (etat.donnees ? 'À jour' : '…');
   pastille.classList.toggle('vide', etat.horsLigne);
   for (const b of document.querySelectorAll('#vues button')) {
     const actif = b.dataset.vue === etat.vue;
@@ -90,7 +167,13 @@ function enTete() {
 function afficher() {
   enTete();
   const c = contenu();
+  // garder la saisie en cours et le défilement quand la liste se rafraîchit
+  const champ = c.querySelector('.ajout input');
+  const saisie = champ ? champ.value : '';
+  const focus = champ && document.activeElement === champ;
+  const defilement = window.scrollY;
   c.replaceChildren();
+
   if (etat.vue === 'reglages') {
     const premier = !reglagesComplets(reglages());
     c.append(vueReglages(reglages(), {
@@ -107,21 +190,28 @@ function afficher() {
       surEnregistrer: (r, resultat) => {
         if (!reglagesComplets(r)) { resultat.textContent = 'Remplis les trois champs (adresse en https).'; return; }
         enregistrerReglages(r);
-        etat.vue = 'stock';
+        etat.vue = 'liste';
         afficher();
         relire();
       },
     }));
     return;
   }
-  if (etat.vue === 'stock') {
-    c.append(vueStock(etat.donnees ? etat.donnees.produits : [], etat.endroit, {
+  const donnees = etat.donnees || {};
+  if (etat.vue === 'liste') {
+    c.append(vueListe(appliquerAttente(donnees.articles, etat.attente, donnees.produits), actionsListe));
+    const nouveau = c.querySelector('.ajout input');
+    nouveau.value = saisie;
+    if (focus) nouveau.focus();
+  } else if (etat.vue === 'stock') {
+    c.append(vueStock(donnees.produits || [], etat.endroit, {
       surEndroit: (e) => { etat.endroit = e; afficher(); },
       surMoins: retirerUn,
     }));
-    return;
+  } else {
+    c.append(el('p', { class: 'aucun' }, 'Bientôt'));
   }
-  c.append(el('p', { class: 'aucun' }, 'Bientôt'));
+  window.scrollTo(0, defilement);
 }
 
 /* ---------- Démarrage ---------- */
@@ -131,7 +221,7 @@ function demarrer() {
     b.addEventListener('click', () => { etat.vue = b.dataset.vue; afficher(); });
   }
   document.getElementById('bouton-reglages').addEventListener('click', () => {
-    etat.vue = etat.vue === 'reglages' && reglagesComplets(reglages()) ? 'stock' : 'reglages';
+    etat.vue = etat.vue === 'reglages' && reglagesComplets(reglages()) ? 'liste' : 'reglages';
     afficher();
   });
   if (!reglagesComplets(reglages())) etat.vue = 'reglages';
@@ -140,6 +230,7 @@ function demarrer() {
 
   setInterval(() => { if (document.visibilityState === 'visible') relire(); }, RAFRAICHISSEMENT_MS);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') relire(); });
+  window.addEventListener('online', relire);
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
