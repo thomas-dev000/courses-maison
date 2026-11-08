@@ -77,7 +77,7 @@ h3 { font-size: 18px; margin: 0; }
   font-size: 22px; flex: none;
 }
 .moins:active { background: var(--ligne); }
-.vide { color: var(--texte-2); text-align: center; margin-top: 40px; }
+.aucun { color: var(--texte-2); text-align: center; margin-top: 40px; }
 
 /* Boutons */
 .btn { min-height: 48px; border-radius: 12px; font-weight: 600; font-size: 15px; padding: 0 16px; }

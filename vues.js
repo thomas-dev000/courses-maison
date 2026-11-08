@@ -57,7 +57,7 @@ export function vueStock(produits, endroitCourant, { surEndroit, surMoins }) {
   return el('section', { class: 'stock' },
     segments,
     liste.length === 0
-      ? el('p', { class: 'vide' }, 'Aucun produit')
+      ? el('p', { class: 'aucun' }, 'Aucun produit')
       : el('ul', { class: 'rangees' }, liste.map(p => el('li', { class: 'rang' },
           el('div', { class: 'textes' },
             el('div', { class: 'nom' }, p.nom),

@@ -121,7 +121,7 @@ function afficher() {
     }));
     return;
   }
-  c.append(el('p', { class: 'vide' }, 'Bientôt'));
+  c.append(el('p', { class: 'aucun' }, 'Bientôt'));
 }
 
 /* ---------- Démarrage ---------- */
